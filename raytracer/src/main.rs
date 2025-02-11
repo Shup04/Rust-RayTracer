@@ -1,4 +1,5 @@
 mod vec3;
+mod color;
 
 fn main() {
     //Image
