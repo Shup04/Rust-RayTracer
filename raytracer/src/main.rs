@@ -31,14 +31,19 @@ fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
     }
 }
 
-fn ray_color(r: &Ray, world: &dyn Hittable) -> Color {
+fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
     // Skybox for rays that dont hit an object.
     let mut rec = HitRecord::new();
+
+    if depth <= 0 {
+        return Color::new(0.0, 0.0, 0.0); // Return black after max depth
+    }
+
     if world.hit(r, 0.001, constants::INFINITY, &mut rec) {
         // Generate a random point in the unit sphere.
         let target = rec.p + rec.normal + random_in_unit_sphere();
         // Recursively trace the scattered ray.
-        return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world);
+        return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world, depth - 1);
     }
 
     //let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
@@ -47,26 +52,29 @@ fn ray_color(r: &Ray, world: &dyn Hittable) -> Color {
     //    let n = vec3::unit_vector(r.at(t) - Vec3::new(0.0, 0.0, -1.0));
     //    return 0.5 * Color::new(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0);
     //}
+
+    //Skybox for rays that end at infinity.
     let unit_direction = vec3::unit_vector(r.direction());
     let t = 0.5 * (unit_direction.y() + 1.0);
-    (1.0 - t) * Color::new(0.0, 0.0, 1.0) + t * Color::new(1.0, 0.7, 0.5)
+    (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.55, 0.80)
 }
 
 fn main() {
     //Image
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 400;
+    const IMAGE_WIDTH: i32 = 500;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
 
     // World
  
     let mut world = HittableList::new();
-    world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.add(Box::new(Sphere::new(Point3::new(0.0, -0.5, -1.0), 0.5)));
     //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
  
     world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
     world.add(Box::new(Cube::new(Point3::new(1.5, -0.75, -2.5), Point3::new(2.5, 0.25, -1.5))));
 
+    world.add(Box::new(Cube::new(Point3::new(-5.0, -1.75, -2.5), Point3::new(5.0, -1.5, 1.5))));
     // Camera
     let viewport_height = 2.0;
     let viewport_width = ASPECT_RATIO * viewport_height;
@@ -91,8 +99,9 @@ fn main() {
                 origin,
                 lower_left_corner + u * horizontal + v * vertical - origin,
             );
-
-            let pixel_color = ray_color(&r, &world);
+            
+            let depth = 5;
+            let pixel_color = ray_color(&r, &world, depth);
             color::write_color(&mut io::stdout(), pixel_color);
         }
     }
