@@ -5,6 +5,7 @@ mod constants;
 mod hittable;
 mod hittable_list;
 mod camera;
+mod material;
 
 mod sphere;
 mod cube;
@@ -59,7 +60,7 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
     //Skybox for rays that end at infinity.
     let unit_direction = vec3::unit_vector(r.direction());
     let t = 0.5 * (unit_direction.y() + 1.0);
-    (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.55, 0.80)
+    (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.35, 0.50)
 }
 
 fn main() {
@@ -67,12 +68,12 @@ fn main() {
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
     const IMAGE_WIDTH: i32 = 1920;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 100;
-    const MAX_DEPTH: i32 = 5;
+    const SAMPLES_PER_PIXEL: i32 = 1024;
+    const MAX_DEPTH: i32 = 10;
 
     // World
     let mut world = HittableList::new();
-    world.add(Box::new(Sphere::new(Point3::new(0.0, -0.5, -1.0), 0.5)));
+    world.add(Box::new(Sphere::new(Point3::new(0.0, -1.0, -1.0), 0.5)));
     //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
     world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
     world.add(Box::new(Cube::new(Point3::new(1.5, -0.75, -2.5), Point3::new(2.5, 0.25, -1.5))));

@@ -16,9 +16,9 @@ pub fn write_color(out: &mut impl Write, pixel_color: Color, samples_per_pixel: 
     // Dividing by the number of samples gives us an average color of each sample,
     // thus reducing noise.
     let scale = 1.0 / samples_per_pixel as f64;
-    r *= scale;
-    g *= scale;
-    b *= scale;
+    r = f64::sqrt(r * scale);
+    g = f64::sqrt(g * scale);
+    b = f64::sqrt(b * scale);
 
     writeln!(
         out,

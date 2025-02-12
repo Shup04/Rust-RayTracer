@@ -1,6 +1,9 @@
+use std::rc::Rc;
+
 use crate::hittable::{HitRecord, Hittable};
 use crate::ray::Ray;
 use crate::vec3::{self, Point3};
+use crate::material::Material;
 
 pub struct Sphere {
     center: Point3,
