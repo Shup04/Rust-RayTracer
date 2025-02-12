@@ -11,7 +11,7 @@ mod cube;
 use std::io;
 use color::Color;
 use ray::Ray;
-use vec3::{Point3, Vec3};
+use vec3::{Point3, Vec3, random_in_unit_sphere};
 use hittable::{HitRecord, Hittable};
 use hittable_list::HittableList;
 
@@ -34,8 +34,11 @@ fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
 fn ray_color(r: &Ray, world: &dyn Hittable) -> Color {
     // Skybox for rays that dont hit an object.
     let mut rec = HitRecord::new();
-    if world.hit(r, 0.0, constants::INFINITY, &mut rec) {
-        return 0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0));
+    if world.hit(r, 0.001, constants::INFINITY, &mut rec) {
+        // Generate a random point in the unit sphere.
+        let target = rec.p + rec.normal + random_in_unit_sphere();
+        // Recursively trace the scattered ray.
+        return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world);
     }
 
     //let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
@@ -46,7 +49,7 @@ fn ray_color(r: &Ray, world: &dyn Hittable) -> Color {
     //}
     let unit_direction = vec3::unit_vector(r.direction());
     let t = 0.5 * (unit_direction.y() + 1.0);
-    (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
+    (1.0 - t) * Color::new(0.0, 0.0, 1.0) + t * Color::new(1.0, 0.7, 0.5)
 }
 
 fn main() {
@@ -58,7 +61,7 @@ fn main() {
     // World
  
     let mut world = HittableList::new();
-    //world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
     //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
  
     world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
