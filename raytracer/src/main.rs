@@ -4,7 +4,9 @@ mod ray;
 mod constants;
 mod hittable;
 mod hittable_list;
+
 mod sphere;
+mod cube;
 
 use std::io;
 use color::Color;
@@ -12,7 +14,9 @@ use ray::Ray;
 use vec3::{Point3, Vec3};
 use hittable::{HitRecord, Hittable};
 use hittable_list::HittableList;
+
 use sphere::Sphere;
+use cube::Cube;
 
 fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
     let oc = r.origin() - center;
@@ -28,17 +32,18 @@ fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
 }
 
 fn ray_color(r: &Ray, world: &dyn Hittable) -> Color {
+    // Skybox for rays that dont hit an object.
     let mut rec = HitRecord::new();
     if world.hit(r, 0.0, constants::INFINITY, &mut rec) {
         return 0.5 * (rec.normal + Color::new(1.0, 1.0, 1.0));
     }
 
-    let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
+    //let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
 
-    if t > 0.0 {
-        let n = vec3::unit_vector(r.at(t) - Vec3::new(0.0, 0.0, -1.0));
-        return 0.5 * Color::new(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0);
-    }
+    //if t > 0.0 {
+    //    let n = vec3::unit_vector(r.at(t) - Vec3::new(0.0, 0.0, -1.0));
+    //    return 0.5 * Color::new(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0);
+    //}
     let unit_direction = vec3::unit_vector(r.direction());
     let t = 0.5 * (unit_direction.y() + 1.0);
     (1.0 - t) * Color::new(1.0, 1.0, 1.0) + t * Color::new(0.5, 0.7, 1.0)
@@ -53,10 +58,11 @@ fn main() {
     // World
  
     let mut world = HittableList::new();
-    world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
-    world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
+    //world.add(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
+    //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
  
-    world.add(Box::new(Sphere::new(Point3::new(1.0, 0.0, -1.0), 0.25)));
+    world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
+    world.add(Box::new(Cube::new(Point3::new(1.5, -0.75, -2.5), Point3::new(2.5, 0.25, -1.5))));
 
     // Camera
     let viewport_height = 2.0;
