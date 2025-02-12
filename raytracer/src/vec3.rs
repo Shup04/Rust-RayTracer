@@ -32,6 +32,12 @@ impl Vec3 {
         f64::sqrt(self.length_squared())
     }
 
+    pub fn near_zero(&self) -> bool {
+        const EPS: f64 = 1.0e-8;
+        // Return true if the vector is close to zero in all dimensions
+        self.e[0].abs() < EPS && self.e[1].abs() < EPS && self.e[2].abs() < EPS
+    }
+
 }
  
  
@@ -49,14 +55,24 @@ pub fn random_in_unit_sphere() -> Vec3 {
     let mut rng = rand::thread_rng();
     loop {
         let p = Vec3::new(
+<<<<<<< HEAD
             rng.gen_range(-0.01..0.01),
             rng.gen_range(-0.01..0.01),
             rng.gen_range(-0.01..0.01),
+=======
+            rng.gen_range(-0.1..0.1),
+            rng.gen_range(-0.1..0.1),
+            rng.gen_range(-0.1..0.1),
+>>>>>>> refs/remotes/origin/main
         );
         if p.length_squared() < 1.0 {
             return p;
         }
     }
+}
+
+pub fn reflect(v: Vec3, n: Vec3) -> Vec3 {
+    v - 2.0 * dot(v, n) * n
 }
 
 // -Vec3

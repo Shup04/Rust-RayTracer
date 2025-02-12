@@ -1,17 +1,22 @@
+use std::rc::Rc;
+
 use crate::hittable::{HitRecord, Hittable};
 use crate::ray::Ray;
 use crate::vec3::{self, Point3, Vec3};
+use crate::material::Material;
 
 pub struct Cube {
     a: Point3, // Min Corner
     b: Point3, // Max Corner
+    mat: Rc<dyn Material>
 }
 
 impl Cube {
-    pub fn new(min: Point3, max: Point3) -> Cube {
+    pub fn new(min: Point3, max: Point3, m: Rc <dyn Material>) -> Cube {
         Cube {
             a: min,
             b: max,
+            mat: m,
         }
     }
 }
@@ -73,7 +78,7 @@ impl Hittable for Cube {
         }
         // Optionally, use rec.set_face_normal(r, rec.normal) if you want to
         // ensure the normal always points outward relative to the ray.
-
+        rec.mat = Some(self.mat.clone());
         return true;
         }
         false
