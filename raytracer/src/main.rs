@@ -5,16 +5,22 @@ mod constants;
 mod hittable;
 mod hittable_list;
 mod camera;
+mod material;
 
 mod sphere;
 mod cube;
 
 use std::io;
+use std::rc::Rc;
+
 use color::Color;
 use ray::Ray;
 use vec3::{Point3, Vec3, random_in_unit_sphere};
 use hittable::{HitRecord, Hittable};
 use hittable_list::HittableList;
+use rand::Rng;
+
+use material::{Lambertian, Metal};
 
 use camera::Camera;
 
@@ -43,10 +49,16 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
     }
 
     if world.hit(r, 0.1, constants::INFINITY, &mut rec) {
+        let mut attenuation = Color::default();
+        let mut scattered = Ray::default();
+        if rec.mat.as_ref().unwrap().scatter(r, &rec, &mut attenuation, &mut scattered) {
+            return attenuation * ray_color(&scattered, world, depth - 1);
+        }
+        return Color::new(0.0, 0.0, 0.0);
         // Generate a random point in the unit sphere.
-        let target = rec.p + rec.normal + random_in_unit_sphere();
+        //let target = rec.p + rec.normal + random_in_unit_sphere();
         // Recursively trace the scattered ray.
-        return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world, depth - 1);
+        //return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world, depth - 1);
     }
 
     //let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
@@ -65,19 +77,41 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
 fn main() {
     //Image
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 1920;
+    const IMAGE_WIDTH: i32 = 500;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
     const SAMPLES_PER_PIXEL: i32 = 100;
     const MAX_DEPTH: i32 = 5;
 
     // World
     let mut world = HittableList::new();
-    world.add(Box::new(Sphere::new(Point3::new(0.0, -0.5, -1.0), 0.5)));
-    //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
-    world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
-    world.add(Box::new(Cube::new(Point3::new(1.5, -0.75, -2.5), Point3::new(2.5, 0.25, -1.5))));
 
-    world.add(Box::new(Cube::new(Point3::new(-5.0, -1.75, -2.5), Point3::new(5.0, -1.5, 1.5))));
+    let ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+    let sphere1 = Rc::new(Metal::new(Color::new(0.8, 0.8, 0.0)));
+    let left_cube = Rc::new(Metal::new(Color::new(1.0, 0.4, 0.8)));
+    let right_cube = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+
+    world.add(Box::new(Sphere::new(
+        Point3::new(0.0, -0.5, -1.0), 
+        0.5,
+        sphere1,
+    )));
+
+    world.add(Box::new(Cube::new(
+        Point3::new(-2.0, -1.5, 2.0), 
+        Point3::new(-1.0, 1.0, -3.0),
+        left_cube,
+    )));
+    world.add(Box::new(Cube::new(
+        Point3::new(1.5, -0.75, -2.5), 
+        Point3::new(2.5, 0.25, -1.5),
+        right_cube,
+    )));
+
+    world.add(Box::new(Cube::new(
+        Point3::new(-5.0, -1.75, -5.5), 
+        Point3::new(5.0, -1.5, 1.5),
+        ground,
+    )));
 
     // Camera
     let cam = Camera::new();
