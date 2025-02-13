@@ -28,32 +28,41 @@ use sphere::Sphere;
 use cube::Cube;
 
 fn integrate_ray_path(r: &Ray, max_t: f64, delta_t: f64) -> Ray {
-    const G: f64 = 6.6743e-11; // G, Gravitational constant
-    let singularity: Point3 = Point3::new(0.0, -0.5, -1.0);
-    let mass: f64 = 3e9;
+    const G: f64 = 6.6743e-11; // gravitational constant
+    let singularity = Point3::new(0.0, -0.5, -1.0);
+    // Try using an exaggerated mass for visual effect.
+    let mass: f64 = 3.5e10; // Adjust this value as needed
     let mut t = 0.0;
 
+    // Start with the ray's current origin and direction.
     let mut pos = r.origin();
-    let mut dir = r.direction();
+    let mut dir = r.direction().normalize();
 
     while t < max_t {
-
-        let R = (r.origin() - singularity).length();
-        let r_hat = (r.origin() - singularity);
-
+        // Calculate the vector from the singularity to the current position.
+        let r_vec = pos - singularity;
+        let R = r_vec.length();
         if R < 1e-6 {
             break;
         }
-
-        let a = -(G * mass * r_hat) / (R * R);
-        let scaled_a = a * delta_t;
-        dir = Vec3::new(r.direction().x() + scaled_a.x(), r.direction().y() + scaled_a.y(), r.direction().z() + scaled_a.z() );
-
+        
+        // Compute the unit vector from the singularity to pos.
+        let r_hat = r_vec / R;
+        
+        // Compute gravitational acceleration: a = -G * mass / R^2 * r_hat
+        let a = -G * mass / (R * R) * r_hat;
+        
+        // Update the direction: add a * delta_t and normalize.
+        dir = (dir + a * delta_t).normalize();
+        
+        // Update the position: move along the new direction.
+        pos = pos + dir * delta_t;
+        
         t += delta_t;
     }
 
-        return Ray::new(r.origin(), dir);
-
+    // Return the new ray with the updated position and direction.
+    Ray::new(pos, dir)
 }
 
 fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32, max_t: f64, delta_t: f64 ) -> Color {
@@ -70,6 +79,7 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32, max_t: f64, delta_t: f64
         let mut attenuation = Color::default();
         let mut scattered = Ray::default();
         if rec.mat.as_ref().unwrap().scatter(r, &rec, &mut attenuation, &mut scattered) {
+            //let integrated_scattered = integrate_ray_path(&scattered, max_t, delta_t);
             return attenuation * ray_color(&scattered, world, depth - 1, max_t, delta_t);
         }
         return Color::new(0.0, 0.0, 0.0);
@@ -84,14 +94,14 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32, max_t: f64, delta_t: f64
 fn main() {
     //Image
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 500;
+    const IMAGE_WIDTH: i32 = 256;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 124;
-    const MAX_DEPTH: i32 = 10;
+    const SAMPLES_PER_PIXEL: i32 = 256;
+    const MAX_DEPTH: i32 = 15;
 
     //Gravity
-    const DELTA_T: f64 = 0.01; // Time in between ray redirects caused by gravity.
-    const MAX_TIME: f64 = 10.0; // Total simulation time
+    const DELTA_T: f64 = 0.001; // Time in between ray redirects caused by gravity.
+    const MAX_TIME: f64 = 1.0; // Total simulation time
 
     // World
     let mut world = HittableList::new();
@@ -103,7 +113,7 @@ fn main() {
 
     world.add(Box::new(Sphere::new(
         Point3::new(0.0, -0.5, -1.0), 
-        0.5,
+        0.1,
         sphere1,
     )));
 
@@ -113,8 +123,8 @@ fn main() {
         left_cube,
     )));
     world.add(Box::new(Cube::new(
-        Point3::new(1.5, -0.75, -2.5), 
-        Point3::new(2.5, 0.25, -1.5),
+        Point3::new(0.5, -0.75, -2.5), 
+        Point3::new(1.5, 0.25, -1.5),
         right_cube,
     )));
 
@@ -139,7 +149,7 @@ fn main() {
                 let v = (j as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
                 let r = cam.get_ray(u, v);
 
-                pixel_color += ray_color(&r, &world, MAX_DEPTH, DELTA_T, MAX_TIME);
+                pixel_color += ray_color(&r, &world, MAX_DEPTH, MAX_TIME, DELTA_T);
             }
             color::write_color(&mut io::stdout(), pixel_color, SAMPLES_PER_PIXEL);
         }

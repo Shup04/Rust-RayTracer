@@ -38,6 +38,11 @@ impl Vec3 {
         self.e[0].abs() < EPS && self.e[1].abs() < EPS && self.e[2].abs() < EPS
     }
 
+    pub fn normalize(&self) -> Vec3 {
+        let len = self.length();
+        Vec3::new(self.e[0] / len, self.e[1] / len, self.e[2] / len)
+    }
+
 }
  
  
