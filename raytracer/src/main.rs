@@ -30,7 +30,7 @@ use cube::Cube;
 fn integrate_ray_path(r: &Ray, max_t: f64, delta_t: f64) -> Ray {
     const G: f64 = 6.6743e-11; // G, Gravitational constant
     let singularity: Point3 = Point3::new(0.0, -0.5, -1.0);
-    let mass: f64 = 2e9;
+    let mass: f64 = 3e9;
     let mut t = 0.0;
 
     let mut pos = r.origin();
