@@ -1,3 +1,5 @@
+use std::time::{Instant, Duration};
+
 mod vec3;
 mod color;
 mod ray;
@@ -126,9 +128,9 @@ fn ray_color(
 fn main() {
     //Image
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 256;
+    const IMAGE_WIDTH: i32 = 1920;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 50;
+    const SAMPLES_PER_PIXEL: i32 = 512;
     const MAX_DEPTH: i32 = 15;
 
     //Gravity
@@ -169,11 +171,20 @@ fn main() {
     // Camera
     let cam = Camera::new();
 
+    //Timer
+    let overall_start = Instant::now();
+    let mut total_scanline_time = Duration::new(0, 0);
+    // How many scanlines have been processed
+    let mut scanlines_done = 0;
+
     //Render
     print!("P3\n{} {}\n255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
 
     for j in (0..IMAGE_HEIGHT).rev() {
-        eprint!("Scanlines remaining: {}", j);
+        scanlines_done = j;
+        let scanline_start = Instant::now();
+
+        // Process scan line
         for i in 0..IMAGE_WIDTH {
             let mut pixel_color = Color::new(0.0, 0.0, 0.0);
             for _ in 0..SAMPLES_PER_PIXEL {
@@ -185,6 +196,20 @@ fn main() {
             }
             color::write_color(&mut io::stdout(), pixel_color, SAMPLES_PER_PIXEL);
         }
+        // End timing for this scanline and update our running total.
+        let scanline_duration = scanline_start.elapsed();
+        total_scanline_time += scanline_duration;
+        scanlines_done += 1;
+        
+        // Calculate average time per scanline so far.
+        let avg_time = total_scanline_time / scanlines_done as u32;
+        let scanlines_remaining = j; // since j counts down
+        let estimated_remaining = avg_time * scanlines_remaining as u32; // multiplication works with Duration
+        
+        eprint!(
+            "Scanlines remaining: {}. Estimated time remaining: {:?}\r",
+            j, estimated_remaining
+        );
     }
     eprint!("Done");
 }
