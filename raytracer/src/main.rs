@@ -27,20 +27,36 @@ use camera::Camera;
 use sphere::Sphere;
 use cube::Cube;
 
-fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
-    let oc = r.origin() - center;
-    let a = r.direction().length_squared();
-    let half_b = vec3::dot(oc, r.direction());
-    let c = oc.length_squared() - radius * radius;
-    let discriminant = half_b * half_b - a * c;
-    if discriminant < 0.0 {
-        -1.0
-    } else {
-        (-half_b - f64::sqrt(discriminant)) / a
+fn integrate_ray_path(r: &Ray, max_t: f64, delta_t: f64) -> Ray {
+    const G: f64 = 6.6743e-11; // G, Gravitational constant
+    let singularity: Point3 = Point3::new(0.0, -0.5, -1.0);
+    let mass: f64 = 2e9;
+    let mut t = 0.0;
+
+    let mut pos = r.origin();
+    let mut dir = r.direction();
+
+    while t < max_t {
+
+        let R = (r.origin() - singularity).length();
+        let r_hat = (r.origin() - singularity);
+
+        if R < 1e-6 {
+            break;
+        }
+
+        let a = -(G * mass * r_hat) / (R * R);
+        let scaled_a = a * delta_t;
+        dir = Vec3::new(r.direction().x() + scaled_a.x(), r.direction().y() + scaled_a.y(), r.direction().z() + scaled_a.z() );
+
+        t += delta_t;
     }
+
+        return Ray::new(r.origin(), dir);
+
 }
 
-fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
+fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32, max_t: f64, delta_t: f64 ) -> Color {
     // Skybox for rays that dont hit an object.
     let mut rec = HitRecord::new();
 
@@ -48,25 +64,16 @@ fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32) -> Color {
         return Color::new(0.0, 0.0, 0.0); // Return black after max depth
     }
 
-    if world.hit(r, 0.1, constants::INFINITY, &mut rec) {
+    let curved_ray = integrate_ray_path(r, max_t, delta_t);
+
+    if world.hit(&curved_ray, 0.1, constants::INFINITY, &mut rec) {
         let mut attenuation = Color::default();
         let mut scattered = Ray::default();
         if rec.mat.as_ref().unwrap().scatter(r, &rec, &mut attenuation, &mut scattered) {
-            return attenuation * ray_color(&scattered, world, depth - 1);
+            return attenuation * ray_color(&scattered, world, depth - 1, max_t, delta_t);
         }
         return Color::new(0.0, 0.0, 0.0);
-        // Generate a random point in the unit sphere.
-        //let target = rec.p + rec.normal + random_in_unit_sphere();
-        // Recursively trace the scattered ray.
-        //return 0.5 * ray_color(&Ray::new(rec.p, target - rec.p), world, depth - 1);
     }
-
-    //let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
-
-    //if t > 0.0 {
-    //    let n = vec3::unit_vector(r.at(t) - Vec3::new(0.0, 0.0, -1.0));
-    //    return 0.5 * Color::new(n.x() + 1.0, n.y() + 1.0, n.z() + 1.0);
-    //}
 
     //Skybox for rays that end at infinity.
     let unit_direction = vec3::unit_vector(r.direction());
@@ -79,8 +86,12 @@ fn main() {
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
     const IMAGE_WIDTH: i32 = 500;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 1024;
+    const SAMPLES_PER_PIXEL: i32 = 124;
     const MAX_DEPTH: i32 = 10;
+
+    //Gravity
+    const DELTA_T: f64 = 0.01; // Time in between ray redirects caused by gravity.
+    const MAX_TIME: f64 = 10.0; // Total simulation time
 
     // World
     let mut world = HittableList::new();
@@ -128,7 +139,7 @@ fn main() {
                 let v = (j as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
                 let r = cam.get_ray(u, v);
 
-                pixel_color += ray_color(&r, &world, MAX_DEPTH);
+                pixel_color += ray_color(&r, &world, MAX_DEPTH, DELTA_T, MAX_TIME);
             }
             color::write_color(&mut io::stdout(), pixel_color, SAMPLES_PER_PIXEL);
         }
