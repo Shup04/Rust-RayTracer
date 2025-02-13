@@ -31,7 +31,7 @@ fn integrate_ray_path(r: &Ray, max_t: f64, delta_t: f64) -> Ray {
     const G: f64 = 6.6743e-11; // gravitational constant
     let singularity = Point3::new(0.0, -0.5, -1.0);
     // Try using an exaggerated mass for visual effect.
-    let mass: f64 = 3.5e10; // Adjust this value as needed
+    let mass: f64 = 3.5e9; // Adjust this value as needed
     let mut t = 0.0;
 
     // Start with the ray's current origin and direction.
@@ -65,28 +65,60 @@ fn integrate_ray_path(r: &Ray, max_t: f64, delta_t: f64) -> Ray {
     Ray::new(pos, dir)
 }
 
-fn ray_color(r: &Ray, world: &dyn Hittable, depth: i32, max_t: f64, delta_t: f64 ) -> Color {
-    // Skybox for rays that dont hit an object.
-    let mut rec = HitRecord::new();
-
+fn ray_color(
+    r: &Ray,
+    world: &dyn Hittable,
+    depth: i32,
+    max_t: f64,
+    delta_t: f64
+) -> Color {
     if depth <= 0 {
-        return Color::new(0.0, 0.0, 0.0); // Return black after max depth
-    }
-
-    let curved_ray = integrate_ray_path(r, max_t, delta_t);
-
-    if world.hit(&curved_ray, 0.1, constants::INFINITY, &mut rec) {
-        let mut attenuation = Color::default();
-        let mut scattered = Ray::default();
-        if rec.mat.as_ref().unwrap().scatter(r, &rec, &mut attenuation, &mut scattered) {
-            //let integrated_scattered = integrate_ray_path(&scattered, max_t, delta_t);
-            return attenuation * ray_color(&scattered, world, depth - 1, max_t, delta_t);
-        }
         return Color::new(0.0, 0.0, 0.0);
     }
 
-    //Skybox for rays that end at infinity.
-    let unit_direction = vec3::unit_vector(r.direction());
+    // Gravitational parameters.
+    const G: f64 = 6.6743e-11;
+    let singularity = Point3::new(0.0, -0.5, -1.0);
+    let mass: f64 = 3.5e9;
+
+    // Use a segment length that is better matched to your scene scale.
+    const SEGMENT_LENGTH: f64 = 0.1; // For example, 0.1 units
+
+    let mut pos = r.origin();
+    let mut dir = r.direction().normalize();
+    let mut t_total = 0.0;
+    let mut rec = HitRecord::new();
+
+    while t_total < max_t {
+        let segment = Ray::new(pos, dir);
+
+        // Check if any object is hit within the next SEGMENT_LENGTH.
+        if world.hit(&segment, 0.001, SEGMENT_LENGTH, &mut rec) {
+            let mut attenuation = Color::default();
+            let mut scattered = Ray::default();
+            if rec.mat.as_ref().unwrap().scatter(&segment, &rec, &mut attenuation, &mut scattered) {
+                return attenuation * ray_color(&scattered, world, depth - 1, max_t, delta_t);
+            }
+            return Color::new(0.0, 0.0, 0.0);
+        }
+
+        // Update gravitational acceleration.
+        let r_vec = pos - singularity;
+        let R = r_vec.length();
+        if R < 1e-6 {
+            break;
+        }
+        let r_hat = r_vec / R;
+        let a = -G * mass / (R * R) * r_hat;
+
+        // Update the direction and position.
+        dir = (dir + a * delta_t).normalize();
+        pos = pos + dir * delta_t;
+        t_total += delta_t;
+    }
+
+    // Return sky color if no hit was detected.
+    let unit_direction = vec3::unit_vector(dir);
     let t = 0.5 * (unit_direction.y() + 1.0);
     (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.35, 0.50)
 }
@@ -96,12 +128,12 @@ fn main() {
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
     const IMAGE_WIDTH: i32 = 256;
     const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 256;
+    const SAMPLES_PER_PIXEL: i32 = 50;
     const MAX_DEPTH: i32 = 15;
 
     //Gravity
-    const DELTA_T: f64 = 0.001; // Time in between ray redirects caused by gravity.
-    const MAX_TIME: f64 = 1.0; // Total simulation time
+    const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
+    const MAX_TIME: f64 = 10.0; // Total simulation time
 
     // World
     let mut world = HittableList::new();
