@@ -55,15 +55,9 @@ pub fn random_in_unit_sphere() -> Vec3 {
     let mut rng = rand::thread_rng();
     loop {
         let p = Vec3::new(
-<<<<<<< HEAD
-            rng.gen_range(-0.01..0.01),
-            rng.gen_range(-0.01..0.01),
-            rng.gen_range(-0.01..0.01),
-=======
-            rng.gen_range(-0.1..0.1),
-            rng.gen_range(-0.1..0.1),
-            rng.gen_range(-0.1..0.1),
->>>>>>> refs/remotes/origin/main
+            rng.gen_range(-0.5..0.5),
+            rng.gen_range(-0.5..0.5),
+            rng.gen_range(-0.5..0.5),
         );
         if p.length_squared() < 1.0 {
             return p;

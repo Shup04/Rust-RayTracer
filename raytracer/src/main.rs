@@ -84,17 +84,10 @@ fn main() {
 
     // World
     let mut world = HittableList::new();
-<<<<<<< HEAD
-    world.add(Box::new(Sphere::new(Point3::new(0.0, -1.0, -1.0), 0.5)));
-    //world.add(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.0)));
-    world.add(Box::new(Cube::new(Point3::new(-2.0, -1.5, -2.0), Point3::new(-1.0, -0.5, -1.0))));
-    world.add(Box::new(Cube::new(Point3::new(1.5, -0.75, -2.5), Point3::new(2.5, 0.25, -1.5))));
-=======
->>>>>>> refs/remotes/origin/main
 
     let ground = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-    let sphere1 = Rc::new(Metal::new(Color::new(0.8, 0.8, 0.0)));
-    let left_cube = Rc::new(Metal::new(Color::new(1.0, 0.4, 0.8)));
+    let sphere1 = Rc::new(Metal::new(Color::new(0.8, 0.8, 0.0), 1.0));
+    let left_cube = Rc::new(Metal::new(Color::new(1.0, 0.4, 0.8), 0.0));
     let right_cube = Rc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
 
     world.add(Box::new(Sphere::new(

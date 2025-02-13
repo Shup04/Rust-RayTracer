@@ -1,9 +1,4 @@
 use std::rc::Rc;
-<<<<<<< HEAD
-
-=======
- 
->>>>>>> refs/remotes/origin/main
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vec3::{self, Point3, Vec3};
