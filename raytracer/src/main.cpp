@@ -2,6 +2,10 @@
 #include "raylib.h"
 #include "raytracer_ffi.h"
 
+#ifndef UNCOMPRESSED_R8G8B8A8
+#define UNCOMPRESSED_R8G8B8A8 7
+#endif
+
 int main() {
   // Initial image computation
   update_image();
@@ -22,7 +26,7 @@ int main() {
     imageWidth,
     imageHeight,
     1, // Mipmaps
-    //UNCOMPRESSED_R8G8B8A8 // Format
+    UNCOMPRESSED_R8G8B8A8 // Format
   };
 
   // Initialize the window

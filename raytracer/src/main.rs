@@ -37,18 +37,15 @@ use rayon::prelude::*;
 use std::sync::Mutex;
 #[macro_use]
 extern crate lazy_static;
-
-const ASPECT_RATIO: f64 = 16.0 / 9.0;
-const IMAGE_WIDTH: i32 = 1080;
-const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-const SAMPLES_PER_PIXEL: i32 = 128;
-const MAX_DEPTH: i32 = 15;
-
-//Gravity
-const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
-const MAX_TIME: f64 = 10.0; // Total simulation time
-const SINGULARITY: bool = false;
-
+    const ASPECT_RATIO: f64 = 16.0 / 9.0;
+    const IMAGE_WIDTH: i32 = 1080;
+    const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
+    const SAMPLES_PER_PIXEL: i32 = 128;
+    const MAX_DEPTH: i32 = 15;
+    //Gravity
+    const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
+    const MAX_TIME: f64 = 10.0; // Total simulation time
+    const SINGULARITY: bool = false;
 // World and Camera Mutexes
 lazy_static! {
     static ref WORLD: Mutex<HittableList> = Mutex::new({
@@ -61,27 +58,27 @@ lazy_static! {
         let right_cube = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
 
         world.add(Box::new(Sphere::new(
-            Point3::new(0.0, -0.5, -1.0), 
+            Point3::new(0.0, -0.5, -1.0),
             0.5,
             sphere1,
         )));
         world.add(Box::new(Sphere::new(
-            Point3::new(3.0, -0.5, -1.0), 
+            Point3::new(3.0, -0.5, -1.0),
             1.0,
             sphere2,
         )));
         world.add(Box::new(Cube::new(
-            Point3::new(-2.0, -1.5, 2.0), 
+            Point3::new(-2.0, -1.5, 2.0),
             Point3::new(-1.0, 1.0, -3.0),
             left_cube,
         )));
         world.add(Box::new(Cube::new(
-            Point3::new(0.5, -0.75, -2.5), 
+            Point3::new(0.5, -0.75, -2.5),
             Point3::new(1.5, 0.25, -1.5),
             right_cube,
         )));
         world.add(Box::new(Cube::new(
-            Point3::new(-5.0, -1.75, -5.5), 
+            Point3::new(-5.0, -1.75, -5.5),
             Point3::new(5.0, -1.5, 1.5),
             ground,
         )));
@@ -184,7 +181,7 @@ pub fn compute_image() -> Vec<PixelColor> {
                 let r = cam.get_ray(u, v);
                 pixel += ray_color(&r, &*world , MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
             }
-            let complete_pixel: PixelColor = PixelColor::new(pixel.x(), pixel.y(), pixel.z());
+            let complete_pixel: PixelColor = PixelColor::new(pixel.x() / (SAMPLES_PER_PIXEL as f64), pixel.y() / (SAMPLES_PER_PIXEL as f64), pixel.z() / (SAMPLES_PER_PIXEL as f64));
             image.push(complete_pixel);
         }
     }
