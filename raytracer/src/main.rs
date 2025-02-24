@@ -39,10 +39,10 @@ use std::sync::Mutex;
 extern crate lazy_static;
 
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
-const IMAGE_WIDTH: i32 = 720;
+const IMAGE_WIDTH: i32 = 480;
 const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-const SAMPLES_PER_PIXEL: i32 = 32;
-const MAX_DEPTH: i32 = 4;
+const SAMPLES_PER_PIXEL: i32 = 8;
+const MAX_DEPTH: i32 = 3;
 
 
 //Gravity
@@ -54,6 +54,8 @@ static mut IMAGE_BUFFER: Option<Vec<PixelColor>> = None;
 
 // World and Camera Mutexes
 lazy_static! {
+    static ref START_TIME: Instant = Instant::now();
+
     static ref WORLD: Mutex<HittableList> = Mutex::new({
         let mut world = HittableList::new();
 
@@ -197,42 +199,55 @@ pub fn compute_image(buffer: &mut [PixelColor]) {
     });
 }
 
-
-fn main() {
-    update_image();
+#[no_mangle]
+pub extern "C" fn animate_sphere_simple() {
+    // Lock the world.
+    let mut world = WORLD.lock().unwrap();
+    // Assume the sphere to animate is at index 0.
+    if let Some(obj) = world.objects_mut().get_mut(0) {
+        // UNSAFELY assume the object is a Sphere.
+        let sphere = unsafe { &mut *(obj.as_mut() as *mut dyn Hittable as *mut Sphere) };
+        // Animate the sphere’s x position with a simple sine over time.
+        let time = START_TIME.elapsed().as_secs_f64();
+        let amplitude = 0.05;
+        sphere.set_center(Point3::new(sphere.center().x() + amplitude * time.sin(), sphere.center().y(), sphere.center().z()));
+    }
 }
-    // External functions for the cpp code to call for rendering.
-    #[no_mangle]
-    pub extern "C" fn initialize_image() {
-        unsafe {
-            // Allocate a vector with the desired number of pixels.
-    IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
+
+// External functions for the cpp code to call for rendering.
+#[no_mangle]
+pub extern "C" fn initialize_image() {
+    unsafe {
+        // Allocate a vector with the desired number of pixels.
+        IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
+    }
+}
+#[no_mangle]
+pub extern "C" fn update_image() {
+    unsafe {
+        if let Some(ref mut buffer) = IMAGE_BUFFER {
+            compute_image(buffer);
         }
     }
-    #[no_mangle]
-    pub extern "C" fn update_image() {
-        unsafe {
-            if let Some(ref mut buffer) = IMAGE_BUFFER {
-                compute_image(buffer);
-            }
-        }
-    }
+}
 
-    #[no_mangle]
-    pub extern "C" fn get_image_ptr() -> *const PixelColor {
-        unsafe {
-            IMAGE_BUFFER
-                .as_ref()
-                .map_or(std::ptr::null(), |buffer| buffer.as_ptr())
-        }
+#[no_mangle]
+pub extern "C" fn get_image_ptr() -> *const PixelColor {
+    unsafe {
+        IMAGE_BUFFER
+            .as_ref()
+            .map_or(std::ptr::null(), |buffer| buffer.as_ptr())
     }
+}
 
-    #[no_mangle]
-    pub extern "C" fn get_image_width() -> i32 {
-        IMAGE_WIDTH as i32
-    }
+#[no_mangle]
+pub extern "C" fn get_image_width() -> i32 {
+    IMAGE_WIDTH as i32
+}
 
-    #[no_mangle]
-    pub extern "C" fn get_image_height() -> i32 {
-        IMAGE_HEIGHT as i32
-    }
+#[no_mangle]
+pub extern "C" fn get_image_height() -> i32 {
+    IMAGE_HEIGHT as i32
+}
+
+fn main(){}

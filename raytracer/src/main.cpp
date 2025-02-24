@@ -11,9 +11,15 @@ int main() {
   // Initial image computation
   initialize_image();
 
+  const int SCALE = 2;
+
   // Load image from rust FFI functions;
   int imageWidth = get_image_width();
   int imageHeight = get_image_height();
+
+  int highResWidth = imageWidth * SCALE;
+  int highResHeight = imageHeight * SCALE;
+
   const PixelColor* pixels = get_image_ptr();
   if (pixels == nullptr) {
     std::cerr << "Error loading image!" << std::endl;
@@ -31,7 +37,7 @@ int main() {
   };
 
   // Initialize the window
-  InitWindow(imageWidth, imageHeight, "Bradleys Raytracer");
+  InitWindow(highResWidth, highResHeight, "Bradleys Raytracer");
   SetTargetFPS(60);
 
   // Create a texture from the image data
@@ -41,16 +47,33 @@ int main() {
   std::cout << "Width: " << imageWidth << "Height: " << imageHeight << std::endl;
 
   while (!WindowShouldClose()) {
-    // Calculate frame
+    animate_sphere_simple();
+
+    // Calculate lower res frame
     update_image();
-    // Get the pointer to the new frame and update the texture
-    const PixelColor* new_frame = get_image_ptr(); 
-    UpdateTexture(texture, (void*)new_frame);
+    const PixelColor* lowResPixels = get_image_ptr();
+    Image lowResImage = {
+      (void*)lowResPixels,
+      imageWidth,
+      imageHeight,
+      1,
+      UNCOMPRESSED_R8G8B8A8
+    };
+
+    // Copy image buffer so scale it up
+    Image tempImage = ImageCopy(lowResImage);
+    ImageResizeNN(&tempImage, highResWidth, highResHeight);
+
+    Texture2D newTexture = LoadTextureFromImage(tempImage);
 
     BeginDrawing();
-    ClearBackground(RAYWHITE);
-    DrawTexture(texture, 0, 0, WHITE);
+      ClearBackground(RAYWHITE);
+      DrawTexture(newTexture, 0, 0, WHITE);
     EndDrawing();
+
+    // Free temp image
+    UnloadImage(tempImage);
+    UnloadTexture(newTexture);
   }
 
   // Close the window and cleanup resources

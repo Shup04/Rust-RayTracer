@@ -9,6 +9,8 @@ typedef struct PixelColor {
     unsigned char a;
 } PixelColor;
 
+void animate_sphere_simple();
+
 void initialize_image();
 void update_image();
 int get_image_width();

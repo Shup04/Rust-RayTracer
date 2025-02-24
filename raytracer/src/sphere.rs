@@ -19,6 +19,12 @@ impl Sphere {
             mat: m,
         }
     }
+    pub fn center(&self) -> Point3 {
+        self.center
+    }
+    pub fn set_center(&mut self, new_center: Point3) {
+        self.center = new_center;
+    }
 }
 
 impl Hittable for Sphere {

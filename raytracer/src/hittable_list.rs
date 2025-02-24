@@ -14,6 +14,15 @@ impl HittableList {
     pub fn add(&mut self, object: Box<dyn Hittable>) {
         self.objects.push(object);
     }
+
+    pub fn objects(&self) -> &Vec<Box<dyn Hittable>> {
+        &self.objects
+    }
+    
+    // New mutable getter
+    pub fn objects_mut(&mut self) -> &mut Vec<Box<dyn Hittable>> {
+        &mut self.objects
+    }
 }
  
 impl Hittable for HittableList {
