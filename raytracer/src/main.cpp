@@ -33,6 +33,8 @@ int main() {
   Texture2D texture = LoadTextureFromImage(imageData);
   UnloadImage(imageData);
 
+  std::cout << "Width: " << imageWidth << "Height: " << imageHeight << std::endl;
+
   while (!WindowShouldClose()) {
     BeginDrawing();
     ClearBackground(RAYWHITE);
