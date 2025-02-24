@@ -12,7 +12,7 @@ mod material;
 
 mod sphere;
 mod cube;
-mod volumetric;
+//mod volumetric;
 
 use std::io;
 use std::sync::Arc;
@@ -31,9 +31,68 @@ use camera::Camera;
 
 use sphere::Sphere;
 use cube::Cube;
-use volumetric::ConstantMedium;
+//use volumetric::ConstantMedium;
 
 use rayon::prelude::*;
+use std::sync::Mutex;
+#[macro_use]
+extern crate lazy_static;
+
+const ASPECT_RATIO: f64 = 16.0 / 9.0;
+const IMAGE_WIDTH: i32 = 1080;
+const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
+const SAMPLES_PER_PIXEL: i32 = 128;
+const MAX_DEPTH: i32 = 15;
+
+//Gravity
+const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
+const MAX_TIME: f64 = 10.0; // Total simulation time
+const SINGULARITY: bool = false;
+
+// World and Camera Mutexes
+lazy_static! {
+    static ref WORLD: Mutex<HittableList> = Mutex::new({
+        let mut world = HittableList::new();
+
+        let ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+        let sphere1 = Arc::new(Metal::new(Color::new(0.8, 0.8, 0.0), 1.0));
+        let sphere2 = Arc::new(Metal::new(Color::new(0.8, 0.8, 0.6), 1.0));
+        let left_cube = Arc::new(Metal::new(Color::new(1.0, 0.4, 0.8), 0.3));
+        let right_cube = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
+
+        world.add(Box::new(Sphere::new(
+            Point3::new(0.0, -0.5, -1.0), 
+            0.5,
+            sphere1,
+        )));
+        world.add(Box::new(Sphere::new(
+            Point3::new(3.0, -0.5, -1.0), 
+            1.0,
+            sphere2,
+        )));
+        world.add(Box::new(Cube::new(
+            Point3::new(-2.0, -1.5, 2.0), 
+            Point3::new(-1.0, 1.0, -3.0),
+            left_cube,
+        )));
+        world.add(Box::new(Cube::new(
+            Point3::new(0.5, -0.75, -2.5), 
+            Point3::new(1.5, 0.25, -1.5),
+            right_cube,
+        )));
+        world.add(Box::new(Cube::new(
+            Point3::new(-5.0, -1.75, -5.5), 
+            Point3::new(5.0, -1.5, 1.5),
+            ground,
+        )));
+        world
+    });
+
+    static ref CAM: Mutex<Camera> = Mutex::new(Camera::new());
+}
+
+static mut IMAGE: Option<Vec<PixelColor>> = None;
+
 
 fn ray_color(
     r: &Ray,
@@ -109,100 +168,58 @@ fn ray_color(
     (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.35, 0.50)
 }
 
+
+pub fn compute_image() -> Vec<PixelColor> {
+    // Lock cam and world mutexes.
+    let cam = CAM.lock().unwrap();
+    let world = WORLD.lock().unwrap();
+
+    let mut image: Vec<PixelColor> = Vec::with_capacity((IMAGE_WIDTH * IMAGE_HEIGHT) as usize);
+    for y in 0..IMAGE_HEIGHT {
+        for x in 0..IMAGE_WIDTH {
+            let mut pixel = Color::new(0.0, 0.0, 0.0);
+            for _ in 0..SAMPLES_PER_PIXEL {
+                let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
+                let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
+                let r = cam.get_ray(u, v);
+                pixel += ray_color(&r, &*world , MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+            }
+            let complete_pixel: PixelColor = PixelColor::new(pixel.x(), pixel.y(), pixel.z());
+            image.push(complete_pixel);
+        }
+    }
+    image
+}
+
 fn main() {
-    //Image
-    const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 1080;
-    const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 128;
-    const MAX_DEPTH: i32 = 15;
+    update_image();
+}
+    // External functions for the cpp code to call for rendering.
+    
+    #[no_mangle]
+    pub extern "C" fn update_image() {
+        unsafe {
+            IMAGE = Some(compute_image());
+        }
+    }
 
-    //Gravity
-    const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
-    const MAX_TIME: f64 = 10.0; // Total simulation time
-    const SINGULARITY: bool = false;
-
-    // World
-    let mut world = HittableList::new();
-
-    let ground = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-    let sphere1 = Arc::new(Metal::new(Color::new(0.8, 0.8, 0.0), 1.0));
-    let sphere2 = Arc::new(Metal::new(Color::new(0.8, 0.8, 0.6), 1.0));
-    let left_cube = Arc::new(Metal::new(Color::new(1.0, 0.4, 0.8), 0.3));
-    let right_cube = Arc::new(Lambertian::new(Color::new(0.8, 0.8, 0.0)));
-
-    world.add(Box::new(Sphere::new(
-        Point3::new(0.0, -0.5, -1.0), 
-        0.5,
-        sphere1,
-    )));
-
-    world.add(Box::new(Sphere::new(
-        Point3::new(3.0, -0.5, -1.0), 
-        1.0,
-        sphere2,
-    )));
-
-    world.add(Box::new(Cube::new(
-        Point3::new(-2.0, -1.5, 2.0), 
-        Point3::new(-1.0, 1.0, -3.0),
-        left_cube,
-    )));
-    world.add(Box::new(Cube::new(
-        Point3::new(0.5, -0.75, -2.5), 
-        Point3::new(1.5, 0.25, -1.5),
-        right_cube,
-    )));
-
-    world.add(Box::new(Cube::new(
-        Point3::new(-5.0, -1.75, -5.5), 
-        Point3::new(5.0, -1.5, 1.5),
-        ground,
-    )));
-
-    // Camera
-    let cam = Camera::new();
-
-    //Render
-    //
-    static mut IMAGE: Option<Vec<Color>> = None;
-
-    pub fn compute_image(cam: &Camera, world: &HittableList) -> Vec<Color> {
-        let mut image: Vec<Color> = Vec::with_capacity((IMAGE_WIDTH * IMAGE_HEIGHT) as usize);
-        for y in 0..IMAGE_HEIGHT {
-            for x in 0..IMAGE_WIDTH {
-                let mut pixel = Color::new(0.0, 0.0, 0.0);
-                for _ in 0..SAMPLES_PER_PIXEL {
-                    let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                    let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                    let r = cam.get_ray(u, v);
-                    pixel += ray_color(&r, world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
-                }
-                image.push(pixel);
+    #[no_mangle]
+    pub extern "C" fn get_image_ptr() -> *const PixelColor {
+        unsafe {
+            if let Some(ref vec) = IMAGE {
+                vec.as_ptr()
+            } else {
+                std::ptr::null()
             }
         }
-        image
     }
 
-    for j in (0..IMAGE_HEIGHT).rev() {
-        let row: Vec<Color> = (0..IMAGE_WIDTH)
-            .into_par_iter()
-            .map(|i| {
-                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
-                for _ in 0..SAMPLES_PER_PIXEL {
-                    let u = (i as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                    let v = (j as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                    let r = cam.get_ray(u, v);
-                    pixel_color += ray_color(&r, &world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
-                }
-                pixel_color
-            })
-            .collect();
-
-        // Write the computed scanline to stdout in order.
-        for pixel in row {
-            color::write_color(&mut io::stdout(), pixel, SAMPLES_PER_PIXEL);
-        }
+    #[no_mangle]
+    pub extern "C" fn get_image_width() -> i32 {
+        IMAGE_WIDTH as i32
     }
-    eprint!("Done");
-}
+
+    #[no_mangle]
+    pub extern "C" fn get_image_height() -> i32 {
+        IMAGE_HEIGHT as i32
+    }
