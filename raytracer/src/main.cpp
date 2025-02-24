@@ -7,8 +7,9 @@
 #endif
 
 int main() {
+  std::cout << "Rendering Frames" << std::endl;
   // Initial image computation
-  update_image();
+  initialize_image();
 
   // Load image from rust FFI functions;
   int imageWidth = get_image_width();
@@ -35,11 +36,17 @@ int main() {
 
   // Create a texture from the image data
   Texture2D texture = LoadTextureFromImage(imageData);
-  UnloadImage(imageData);
+  //UnloadImage(imageData);
 
   std::cout << "Width: " << imageWidth << "Height: " << imageHeight << std::endl;
 
   while (!WindowShouldClose()) {
+    // Calculate frame
+    update_image();
+    // Get the pointer to the new frame and update the texture
+    const PixelColor* new_frame = get_image_ptr(); 
+    UpdateTexture(texture, (void*)new_frame);
+
     BeginDrawing();
     ClearBackground(RAYWHITE);
     DrawTexture(texture, 0, 0, WHITE);

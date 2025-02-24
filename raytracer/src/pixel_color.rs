@@ -1,5 +1,6 @@
 use std::ops::AddAssign;
 
+#[derive(Clone, Copy, Default)]
 #[repr(C)]
 pub struct PixelColor {
     pub r: u8,
@@ -27,3 +28,4 @@ impl AddAssign for PixelColor {
         self.a = self.a.saturating_add(other.a); // useless for now since alpha is always 100%
     }
 }
+

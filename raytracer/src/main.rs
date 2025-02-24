@@ -37,15 +37,21 @@ use rayon::prelude::*;
 use std::sync::Mutex;
 #[macro_use]
 extern crate lazy_static;
-    const ASPECT_RATIO: f64 = 16.0 / 9.0;
-    const IMAGE_WIDTH: i32 = 1080;
-    const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-    const SAMPLES_PER_PIXEL: i32 = 128;
-    const MAX_DEPTH: i32 = 15;
-    //Gravity
-    const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
-    const MAX_TIME: f64 = 10.0; // Total simulation time
-    const SINGULARITY: bool = false;
+
+const ASPECT_RATIO: f64 = 16.0 / 9.0;
+const IMAGE_WIDTH: i32 = 720;
+const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
+const SAMPLES_PER_PIXEL: i32 = 32;
+const MAX_DEPTH: i32 = 4;
+
+
+//Gravity
+const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
+const MAX_TIME: f64 = 10.0; // Total simulation time
+const SINGULARITY: bool = false;
+
+static mut IMAGE_BUFFER: Option<Vec<PixelColor>> = None;
+
 // World and Camera Mutexes
 lazy_static! {
     static ref WORLD: Mutex<HittableList> = Mutex::new({
@@ -166,48 +172,58 @@ fn ray_color(
 }
 
 
-pub fn compute_image() -> Vec<PixelColor> {
-    // Lock cam and world mutexes.
+pub fn compute_image(buffer: &mut [PixelColor]) {
+    // Clone shared state for thread safety.
     let cam = CAM.lock().unwrap();
     let world = WORLD.lock().unwrap();
+    let width_usize = IMAGE_WIDTH as usize;
 
-    let mut image: Vec<PixelColor> = Vec::with_capacity((IMAGE_WIDTH * IMAGE_HEIGHT) as usize);
-    for y in 0..IMAGE_HEIGHT {
-        for x in 0..IMAGE_WIDTH {
-            let mut pixel = Color::new(0.0, 0.0, 0.0);
-            for _ in 0..SAMPLES_PER_PIXEL {
-                let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                let r = cam.get_ray(u, v);
-                pixel += ray_color(&r, &*world , MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
-            }
-            let complete_pixel: PixelColor = PixelColor::new(pixel.x() / (SAMPLES_PER_PIXEL as f64), pixel.y() / (SAMPLES_PER_PIXEL as f64), pixel.z() / (SAMPLES_PER_PIXEL as f64));
-            image.push(complete_pixel);
+    buffer.par_iter_mut().enumerate().for_each(|(index, pixel)| {
+        let x = index % width_usize;
+        let y = IMAGE_HEIGHT - 1 - (index / width_usize) as i32;
+        let mut accum_color = Color::new(0.0, 0.0, 0.0);
+        for _ in 0..SAMPLES_PER_PIXEL {
+            let u = (x as f64 + constants::random_double()) / ((IMAGE_WIDTH - 1) as f64);
+            let v = (y as f64 + constants::random_double()) / ((IMAGE_HEIGHT - 1) as f64);
+            let r = cam.get_ray(u, v);
+            accum_color += ray_color(&r, &*world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
         }
-    }
-    image
+        // Average the color samples.
+        *pixel = PixelColor::new(
+            accum_color.x() / (SAMPLES_PER_PIXEL as f64),
+            accum_color.y() / (SAMPLES_PER_PIXEL as f64),
+            accum_color.z() / (SAMPLES_PER_PIXEL as f64),
+        );
+    });
 }
+
 
 fn main() {
     update_image();
 }
     // External functions for the cpp code to call for rendering.
-    
+    #[no_mangle]
+    pub extern "C" fn initialize_image() {
+        unsafe {
+            // Allocate a vector with the desired number of pixels.
+    IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
+        }
+    }
     #[no_mangle]
     pub extern "C" fn update_image() {
         unsafe {
-            IMAGE = Some(compute_image());
+            if let Some(ref mut buffer) = IMAGE_BUFFER {
+                compute_image(buffer);
+            }
         }
     }
 
     #[no_mangle]
     pub extern "C" fn get_image_ptr() -> *const PixelColor {
         unsafe {
-            if let Some(ref vec) = IMAGE {
-                vec.as_ptr()
-            } else {
-                std::ptr::null()
-            }
+            IMAGE_BUFFER
+                .as_ref()
+                .map_or(std::ptr::null(), |buffer| buffer.as_ptr())
         }
     }
 
