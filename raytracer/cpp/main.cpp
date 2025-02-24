@@ -1,35 +1,32 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/vec4.hpp>
-#include <glm/mat4x4.hpp>
-
-#include <iostream>
+#include "raylib.h"
 
 int main() {
-    glfwInit();
+    // Define screen dimensions
+    const int screenWidth = 800;
+    const int screenHeight = 450;
+    
+    // Initialize window with title "raylib Example"
+    InitWindow(screenWidth, screenHeight, "raylib Example");
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
+    // Set the target FPS (frames per second)
+    SetTargetFPS(60);
 
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-    std::cout << extensionCount << " extensions supported\n";
-
-    glm::mat4 matrix;
-    glm::vec4 vec;
-    auto test = matrix * vec;
-
-    while(!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+    // Main game loop: run until the window is closed
+    while (!WindowShouldClose()) {
+        // Start drawing
+        BeginDrawing();
+        
+        // Clear the screen to a white background
+        ClearBackground(RAYWHITE);
+        
+        // Draw some text on the screen
+        DrawText("Hello, raylib!", 190, 200, 20, LIGHTGRAY);
+        
+        // Finish drawing and swap buffers
+        EndDrawing();
     }
 
-    glfwDestroyWindow(window);
-
-    glfwTerminate();
-
+    // Close the window and cleanup resources
+    CloseWindow();
     return 0;
 }

@@ -1,0 +1,123 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba32f) uniform image2D outputImage;
+
+// Structs
+struct Ray {
+  vec3 origin;
+  vec3 direction;
+};
+
+struct Sphere {
+  vec3 center;
+  float radius;
+  int materialId;
+};
+
+struct Cube {
+  vec3 minBounds;
+  vec3 maxBounds;
+  int materialId;
+};
+
+struct Material {
+  vec3 albedo;
+};
+
+struct HitRecord {
+  float t;
+  vec3 p;
+  vec3 normal;
+  bool frontFace;
+  int materialId;
+};
+
+// Hit Logic
+bool hitSphere(Ray r, Sphere s, float t_min, float t_max, out HitRecord rec) {
+  vec3 oc = r.origin - s.center;
+  float a = dot(r.direction, r.direction);
+  float half_b = dot(oc, r.direction);
+  float c = dot(oc, oc) - s.radius * s.radius;
+  float discriminant = half_b * half_b - a * c;
+
+  if (discriminant < 0.0) {
+    return false;
+  }
+  
+  float sqrt_d = sqrt(discriminant);
+  float root = (-half_b - sqrt_d) / a;
+
+  if (root < t_min || t_max < root) {
+    root = (-half_b + sqrt_d) / a;
+    if (root < t_min || t_max < root) {
+      return false;
+    }
+  }
+
+  // Fill in the hit record.
+  rec.t = root;
+  rec.p = r.origin + root * r.direction;
+  
+  // Compute the outward normal.
+  vec3 outward_normal = (rec.p - s.center) / s.radius;
+  
+  // Determine if the hit is on the front face.
+  rec.frontFace = dot(r.direction, outward_normal) < 0.0;
+  rec.normal = rec.frontFace ? outward_normal : -outward_normal;
+  
+  // Store the material ID from the sphere.
+  rec.materialId = s.materialId;
+  
+  return true;
+}
+
+
+vec3 rayColor(Ray r, int depth, float max_t, float delta_t) {
+    vec3 color = vec3(0.0);
+    // Iterate (simulate recursion) until depth is exhausted.
+    for (int i = 0; i < depth; i++) {
+        HitRecord rec;
+        // Loop over your scene objects:
+        bool hitAnything = false;
+        // Example: for each sphere in your scene, test intersection.
+        // (You'll need to iterate over a buffer of spheres.)
+        // If hit, update rec, compute scattered ray, update color.
+        if (hitAnything) {
+            // Set new r based on scattered ray and accumulate attenuation.
+        } else {
+            // No hit: use sky color and break out.
+            color = mix(vec3(0.81, 0.93, 0.96), vec3(0.28, 0.35, 0.50), 0.5 * (normalize(r.direction).y + 1.0));
+            break;
+        }
+    }
+    return color;
+}
+
+// Example camera uniform
+layout(binding = 1) uniform Camera {
+    vec3 position;
+    vec3 lowerLeftCorner;
+    vec3 horizontal;
+    vec3 vertical;
+} camera;
+
+// Generate a ray for a given pixel coordinate.
+Ray generateCameraRay(ivec2 pixelCoords) {
+    // Assume you know the image resolution (passed as a uniform or constant)
+    const ivec2 resolution = ivec2(1920, 1080);
+    vec2 uv = vec2(pixelCoords) / vec2(resolution);
+    Ray r;
+    r.origin = camera.position;
+    r.direction = normalize(camera.lowerLeftCorner + uv.x * camera.horizontal + uv.y * camera.vertical - camera.position);
+    return r;
+}
+
+
+void main() {
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+    // Generate ray based on camera and pixel coordinates.
+    Ray r = generateCameraRay(pixelCoords);
+    // Compute color (using a fixed depth, max_t, delta_t, etc.)
+    vec3 color = rayColor(r, 5, 10.0, 0.1);
+    imageStore(outputImage, pixelCoords, vec4(color, 1.0));
+}

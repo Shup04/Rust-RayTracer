@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <cstring>
 #include <map>
@@ -43,6 +44,19 @@ private:
     VkDevice device;
 
     VkQueue graphicsQueue;
+
+    // Compute pipeline objects
+    VkPipeline computePipeline;
+    VkPipelineLayout computePipelineLayout;
+    VkShaderModule computeShaderModule;
+    VkCommandPool computeCommandPool;
+    VkCommandBuffer computeCommandBuffer;
+    VkQueue computeQueue; // You can use graphicsQueue if that’s all you have.
+
+    // (Optional) Descriptor sets and layouts if you pass data to the shader:
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet descriptorSet;
 
 
     struct QueueFamilyIndices {
@@ -239,6 +253,128 @@ private:
       vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
     }
 
+  std::vector<char> readFile(const std::string& filename) {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open file!");
+    }
+    size_t fileSize = (size_t) file.tellg();
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+    return buffer;
+}
+
+VkShaderModule createShaderModule(const std::vector<char>& code) {
+    VkShaderModuleCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    createInfo.codeSize = code.size();
+    createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+    
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create shader module!");
+    }
+    return shaderModule;
+}
+
+void createComputePipeline() {
+    if (device == VK_NULL_HANDLE) {
+        std::cerr << "Error: Logical device is null!" << std::endl;
+        return;
+    }
+    // Load your compute shader SPIR-V code:
+    auto shaderCode = readFile("raytracer.spv");
+    std::cout << "Shader file size: " << shaderCode.size() << " bytes" << std::endl;
+    if (shaderCode.empty()) {
+        throw std::runtime_error("Shader file is empty!");
+    }
+    computeShaderModule = createShaderModule(shaderCode);
+
+    // Create a shader stage info for the compute shader.
+    VkPipelineShaderStageCreateInfo shaderStageInfo{};
+    shaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStageInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    shaderStageInfo.module = computeShaderModule;
+    shaderStageInfo.pName  = "main"; // entry point
+
+    // (Optional) Create descriptor set layouts if your shader uses them.
+    // For simplicity, if your shader only writes to an output image that is bound
+    // at binding 0, you might already have declared that in your shader.
+
+    // Create a pipeline layout. (Pass your descriptor set layout if using one.)
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    // pipelineLayoutInfo.setLayoutCount = 1;
+    // pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout; // if you have one
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &computePipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create compute pipeline layout!");
+    }
+
+    // Now create the compute pipeline.
+    VkComputePipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipelineInfo.stage  = shaderStageInfo;
+    pipelineInfo.layout = computePipelineLayout;
+
+    if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &computePipeline) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create compute pipeline!");
+    }
+}
+
+void createComputeCommandBuffer() {
+    // Create a command pool for compute commands. Use the same queue family index.
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);  // Already implemented
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = indices.graphicsFamily.value();
+    poolInfo.flags = 0;
+    
+    if (vkCreateCommandPool(device, &poolInfo, nullptr, &computeCommandPool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create compute command pool!");
+    }
+
+    // Allocate a command buffer.
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = computeCommandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(device, &allocInfo, &computeCommandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate compute command buffer!");
+    }
+}
+
+void recordComputeCommandBuffer() {
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    if (vkBeginCommandBuffer(computeCommandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin recording compute command buffer!");
+    }
+
+    // Bind the compute pipeline.
+    vkCmdBindPipeline(computeCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+
+    // Bind descriptor sets if you have any (for output image, etc.)
+    // vkCmdBindDescriptorSets(computeCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout,
+    //                          0, 1, &descriptorSet, 0, nullptr);
+
+    // Calculate dispatch dimensions.
+    // For example, if your output image is width x height and your workgroup size is 16x16:
+    uint32_t groupCountX = (width + 15) / 16;
+    uint32_t groupCountY = (height + 15) / 16;
+    vkCmdDispatch(computeCommandBuffer, groupCountX, groupCountY, 1);
+
+    if (vkEndCommandBuffer(computeCommandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to record compute command buffer!");
+    }
+}
 
     void initWindow() {
       glfwInit();
@@ -253,9 +389,26 @@ private:
       //setupDebugMessenger();
       pickPhysicalDevice();
       createLogicalDevice();
+      // Create the compute pipeline after the device is ready.
+      createComputePipeline();
+      createComputeCommandBuffer();
+      //recordComputeCommandBuffer();
     }
 
     void mainLoop() {
+        // For a one-off compute dispatch:
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &computeCommandBuffer;
+
+        if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+            throw std::runtime_error("failed to submit compute command buffer!");
+        }
+        vkQueueWaitIdle(graphicsQueue);
+
+        // Now you can read back results from your output image/buffer
+        // (For testing, you might write these to a file or check them in a debugger)
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
         }

@@ -3,7 +3,7 @@ use crate::hittable::HitRecord;
 use crate::ray::Ray;
 use crate::vec3::{self, random_in_unit_sphere};
 
-pub trait Material {
+pub trait Material: Send + Sync {
     fn scatter(
         &self,
         r_in: &Ray,
@@ -73,5 +73,30 @@ impl Material for Metal {
         *attenuation = self.albedo;
         *scattered = Ray::new(rec.p, reflected + self.fuzz * vec3::random_in_unit_sphere());
         vec3::dot(scattered.direction(), rec.normal) > 0.0
+    }
+}
+
+
+pub struct Isotropic {
+    albedo: Color,
+}
+
+impl Isotropic {
+    pub fn new (albedo: Color) -> Isotropic {
+        Self { albedo }
+    }
+}
+
+impl Material for Isotropic {
+    fn scatter (
+        &self,
+        _r_in: &Ray,
+        rec: &HitRecord,
+        attenuation: &mut Color,
+        scattered: &mut Ray,
+    ) -> bool {
+        *scattered = Ray::new(rec.p, random_in_unit_sphere());
+        *attenuation = self.albedo;
+        true
     }
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use crate::hittable::{HitRecord, Hittable};
 use crate::ray::Ray;
@@ -8,11 +8,11 @@ use crate::material::Material;
 pub struct Cube {
     a: Point3, // Min Corner
     b: Point3, // Max Corner
-    mat: Rc<dyn Material>
+    mat: Arc<dyn Material>
 }
 
 impl Cube {
-    pub fn new(min: Point3, max: Point3, m: Rc <dyn Material>) -> Cube {
+    pub fn new(min: Point3, max: Point3, m: Arc <dyn Material>) -> Cube {
         Cube {
             a: min,
             b: max,
