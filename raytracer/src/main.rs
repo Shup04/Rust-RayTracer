@@ -2,6 +2,7 @@ use std::time::{Instant, Duration};
 
 mod vec3;
 mod color;
+mod pixel_color;
 mod ray;
 mod constants;
 mod hittable;
@@ -17,6 +18,7 @@ use std::io;
 use std::sync::Arc;
 
 use color::Color;
+use pixel_color::PixelColor;
 use ray::Ray;
 use vec3::{Point3, Vec3, random_in_unit_sphere};
 use hittable::{HitRecord, Hittable};
@@ -107,16 +109,6 @@ fn ray_color(
     (1.0 - t) * Color::new(0.81, 0.93, 0.96) + t * Color::new(0.28, 0.35, 0.50)
 }
 
-fn compute_pixel(x: i32, y: i32) -> Color {
-    let mut pixel: Color = Color::new(0.0, 0.0, 0.0);
-    for _ in 0..SAMPLES_PER_PIXEL {
-        let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
-        let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-        let r = cam.get_ray(u, v);
-        pixel_color += ray_color(&r, &world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
-    }
-}
-
 fn main() {
     //Image
     const ASPECT_RATIO: f64 = 16.0 / 9.0;
@@ -173,24 +165,26 @@ fn main() {
 
     //Render
     //
-    let mut image: Vec<Color> = Vec::with_capacity((IMAGE_WIDTH * IMAGE_HEIGHT) as usize) ;
-    for y in 0..IMAGE_HEIGHT {
-        for x in 0..IMAGE_WIDTH {
-            let mut pixel = Color::new(0.0, 0.0, 0.0);
-            for _ in 0..SAMPLES_PER_PIXEL {
-                let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
-                let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
-                let r = cam.get_ray(u, v);
-                pixel += ray_color(&r, &world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+    static mut IMAGE: Option<Vec<Color>> = None;
+
+    pub fn compute_image(cam: &Camera, world: &HittableList) -> Vec<Color> {
+        let mut image: Vec<Color> = Vec::with_capacity((IMAGE_WIDTH * IMAGE_HEIGHT) as usize);
+        for y in 0..IMAGE_HEIGHT {
+            for x in 0..IMAGE_WIDTH {
+                let mut pixel = Color::new(0.0, 0.0, 0.0);
+                for _ in 0..SAMPLES_PER_PIXEL {
+                    let u = (x as f64 + constants::random_double()) / (IMAGE_WIDTH - 1) as f64;
+                    let v = (y as f64 + constants::random_double()) / (IMAGE_HEIGHT - 1) as f64;
+                    let r = cam.get_ray(u, v);
+                    pixel += ray_color(&r, world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+                }
+                image.push(pixel);
             }
-            image.push(pixel);
         }
+        image
     }
 
     for j in (0..IMAGE_HEIGHT).rev() {
-        scanlines_done = j;
-        let scanline_start = Instant::now();
-
         let row: Vec<Color> = (0..IMAGE_WIDTH)
             .into_par_iter()
             .map(|i| {
@@ -205,24 +199,10 @@ fn main() {
             })
             .collect();
 
-    // Write the computed scanline to stdout in order.
-    for pixel in row {
-        color::write_color(&mut io::stdout(), pixel, SAMPLES_PER_PIXEL);
-    }
-        // End timing for this scanline and update our running total.
-        let scanline_duration = scanline_start.elapsed();
-        total_scanline_time += scanline_duration;
-        scanlines_done += 1;
-        
-        // Calculate average time per scanline so far.
-        let avg_time = total_scanline_time / scanlines_done as u32;
-        let scanlines_remaining = j; // since j counts down
-        let estimated_remaining = avg_time * scanlines_remaining as u32; // multiplication works with Duration
-        
-        eprint!(
-            "Scanlines remaining: {}. Estimated time remaining: {:?}\r",
-            j, estimated_remaining
-        );
+        // Write the computed scanline to stdout in order.
+        for pixel in row {
+            color::write_color(&mut io::stdout(), pixel, SAMPLES_PER_PIXEL);
+        }
     }
     eprint!("Done");
 }
