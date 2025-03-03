@@ -7,77 +7,62 @@
 #endif
 
 int main() {
-  std::cout << "Rendering Frames" << std::endl;
-  // Initial image computation
-  initialize_image();
+    std::cout << "Rendering Frames" << std::endl;
+    initialize_image();
 
-  const int SCALE = 2;
+    const int SCALE = 1;
+    int imageWidth = get_image_width();
+    int imageHeight = get_image_height();
+    int highResWidth = imageWidth * SCALE;
+    int highResHeight = imageHeight * SCALE;
 
-  // Load image from rust FFI functions;
-  int imageWidth = get_image_width();
-  int imageHeight = get_image_height();
+    const PixelColor* pixels = get_image_ptr();
+    if (pixels == nullptr) {
+        std::cerr << "Error loading image!" << std::endl;
+        return 1;
+    }
 
-  int highResWidth = imageWidth * SCALE;
-  int highResHeight = imageHeight * SCALE;
+    Image imageData = { (void*)pixels, imageWidth, imageHeight, 1, UNCOMPRESSED_R8G8B8A8 };
+    
+    InitWindow(highResWidth, highResHeight, "Bradleys Raytracer");
+    SetTargetFPS(60);
 
-  const PixelColor* pixels = get_image_ptr();
-  if (pixels == nullptr) {
-    std::cerr << "Error loading image!" << std::endl;
-    return 1;
-  }
+    // Create texture from the low-res image
+    Texture2D lowResTexture = LoadTextureFromImage(imageData);
 
-  // Create an image from the vector of pixels given by rust
-  // NOTE: the pixel data is stored in row major order in rgba format with 255 colors.
-  Image imageData = {
-    (void*)pixels, // Pointer
-    imageWidth,
-    imageHeight,
-    1, // Mipmaps
-    UNCOMPRESSED_R8G8B8A8 // Format
-  };
+    // (Optional) Create a high-res texture if needed
+    Image tempImage = ImageCopy(imageData);
+    ImageResize(&tempImage, highResWidth, highResHeight);
+    Texture2D highResTexture = LoadTextureFromImage(tempImage);
+    UnloadImage(tempImage);  // Unload now that highResTexture is created
 
-  // Initialize the window
-  InitWindow(highResWidth, highResHeight, "Bradleys Raytracer");
-  SetTargetFPS(60);
+    std::cout << "Width: " << imageWidth << " Height: " << imageHeight << std::endl;
 
-  // Create a texture from the image data
-  Texture2D texture = LoadTextureFromImage(imageData);
-  //UnloadImage(imageData);
+    int frameCount = 0;
+    while (!WindowShouldClose()) {
+        animate_sphere_simple();
 
-  std::cout << "Width: " << imageWidth << "Height: " << imageHeight << std::endl;
+        // Update image from Rust FFI
+        update_image(frameCount);
+        const PixelColor* lowResPixels = get_image_ptr();
+        Image lowResImage = { (void*)lowResPixels, imageWidth, imageHeight, 1, UNCOMPRESSED_R8G8B8A8 };
 
-  while (!WindowShouldClose()) {
-    animate_sphere_simple();
+        // Update texture with new pixel data (using the correct pointer)
+        UpdateTexture(lowResTexture, lowResImage.data);
+        SetTextureFilter(lowResTexture, TEXTURE_FILTER_BILINEAR);
 
-    // Calculate lower res frame
-    update_image();
-    const PixelColor* lowResPixels = get_image_ptr();
-    Image lowResImage = {
-      (void*)lowResPixels,
-      imageWidth,
-      imageHeight,
-      1,
-      UNCOMPRESSED_R8G8B8A8
-    };
+        BeginDrawing();
+            ClearBackground(RAYWHITE);
+            DrawTextureEx(lowResTexture, (Vector2){0, 0}, 0.0f, SCALE, WHITE);
+        EndDrawing();
+        
+        frameCount++;
+        // Do not unload lowResTexture or lowResImage here since lowResImage is stack allocated
+    }
 
-    // Copy image buffer so scale it up
-    Image tempImage = ImageCopy(lowResImage);
-    ImageResizeNN(&tempImage, highResWidth, highResHeight);
-
-    Texture2D newTexture = LoadTextureFromImage(tempImage);
-
-    BeginDrawing();
-      ClearBackground(RAYWHITE);
-      DrawTexture(newTexture, 0, 0, WHITE);
-    EndDrawing();
-
-    // Free temp image
-    UnloadImage(tempImage);
-    UnloadTexture(newTexture);
-  }
-
-  // Close the window and cleanup resources
-  UnloadTexture(texture);
-  CloseWindow();
-  return 0;
+    // Cleanup resources
+    UnloadTexture(lowResTexture);
+    UnloadTexture(highResTexture);
+    CloseWindow();
+    return 0;
 }

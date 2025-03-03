@@ -12,7 +12,7 @@ typedef struct PixelColor {
 void animate_sphere_simple();
 
 void initialize_image();
-void update_image();
+void update_image(int frame);
 int get_image_width();
 int get_image_height();
 const PixelColor* get_image_ptr();

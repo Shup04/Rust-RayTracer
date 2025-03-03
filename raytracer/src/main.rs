@@ -38,12 +38,12 @@ use std::sync::Mutex;
 #[macro_use]
 extern crate lazy_static;
 
+//Rendering
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
-const IMAGE_WIDTH: i32 = 480;
+const IMAGE_WIDTH: i32 = 1080;
 const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-const SAMPLES_PER_PIXEL: i32 = 8;
+const SAMPLES_PER_PIXEL: i32 = 1;
 const MAX_DEPTH: i32 = 3;
-
 
 //Gravity
 const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
@@ -174,7 +174,7 @@ fn ray_color(
 }
 
 
-pub fn compute_image(buffer: &mut [PixelColor]) {
+pub fn compute_image(buffer: &mut [PixelColor], frame: i32) {
     // Clone shared state for thread safety.
     let cam = CAM.lock().unwrap();
     let world = WORLD.lock().unwrap();
@@ -183,19 +183,28 @@ pub fn compute_image(buffer: &mut [PixelColor]) {
     buffer.par_iter_mut().enumerate().for_each(|(index, pixel)| {
         let x = index % width_usize;
         let y = IMAGE_HEIGHT - 1 - (index / width_usize) as i32;
-        let mut accum_color = Color::new(0.0, 0.0, 0.0);
-        for _ in 0..SAMPLES_PER_PIXEL {
-            let u = (x as f64 + constants::random_double()) / ((IMAGE_WIDTH - 1) as f64);
-            let v = (y as f64 + constants::random_double()) / ((IMAGE_HEIGHT - 1) as f64);
-            let r = cam.get_ray(u, v);
-            accum_color += ray_color(&r, &*world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+
+        let grid_spacing = 3;
+        let total = grid_spacing * grid_spacing; // 25
+        let idx = frame % total;
+        let offset_x = idx % grid_spacing;
+        let offset_y = idx / grid_spacing; // integer division
+
+        if (x as i32 % grid_spacing == offset_x) && (y % grid_spacing == offset_y) {
+            let mut accum_color = Color::new(0.0, 0.0, 0.0);
+            for _ in 0..SAMPLES_PER_PIXEL {
+                let u = (x as f64 + constants::random_double() * 1.0) / ((IMAGE_WIDTH - 1) as f64);
+                let v = (y as f64 + constants::random_double() * 1.0) / ((IMAGE_HEIGHT - 1) as f64);
+                let r = cam.get_ray(u, v);
+                accum_color += ray_color(&r, &*world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+            }
+            // Average the color samples.
+            *pixel = PixelColor::new(
+                accum_color.x() / (SAMPLES_PER_PIXEL as f64),
+                accum_color.y() / (SAMPLES_PER_PIXEL as f64),
+                accum_color.z() / (SAMPLES_PER_PIXEL as f64),
+            );
         }
-        // Average the color samples.
-        *pixel = PixelColor::new(
-            accum_color.x() / (SAMPLES_PER_PIXEL as f64),
-            accum_color.y() / (SAMPLES_PER_PIXEL as f64),
-            accum_color.z() / (SAMPLES_PER_PIXEL as f64),
-        );
     });
 }
 
@@ -222,11 +231,12 @@ pub extern "C" fn initialize_image() {
         IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
     }
 }
+
 #[no_mangle]
-pub extern "C" fn update_image() {
+pub extern "C" fn update_image(frame: i32) {
     unsafe {
         if let Some(ref mut buffer) = IMAGE_BUFFER {
-            compute_image(buffer);
+            compute_image(buffer, frame);
         }
     }
 }
