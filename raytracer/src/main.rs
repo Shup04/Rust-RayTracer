@@ -13,12 +13,15 @@ mod material;
 mod sphere;
 mod cube;
 //mod volumetric;
+mod color_accumulator;
 
 use std::io;
 use std::sync::Arc;
 
 use color::Color;
 use pixel_color::PixelColor;
+use color_accumulator::ColorAccumulator;
+
 use ray::Ray;
 use vec3::{Point3, Vec3, random_in_unit_sphere};
 use hittable::{HitRecord, Hittable};
@@ -42,8 +45,10 @@ extern crate lazy_static;
 const ASPECT_RATIO: f64 = 16.0 / 9.0;
 const IMAGE_WIDTH: i32 = 1080;
 const IMAGE_HEIGHT: i32 = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as i32;
-const SAMPLES_PER_PIXEL: i32 = 1;
+const SAMPLES_PER_PIXEL: i32 = 5;
 const MAX_DEPTH: i32 = 3;
+
+const ALPHA: f64 = 0.5;
 
 //Gravity
 const DELTA_T: f64 = 0.1; // Time in between ray redirects caused by gravity.
@@ -51,6 +56,7 @@ const MAX_TIME: f64 = 10.0; // Total simulation time
 const SINGULARITY: bool = false;
 
 static mut IMAGE_BUFFER: Option<Vec<PixelColor>> = None;
+static mut ACCUM_BUFFER: Option<Vec<ColorAccumulator>> = None;
 
 // World and Camera Mutexes
 lazy_static! {
@@ -175,37 +181,41 @@ fn ray_color(
 
 
 pub fn compute_image(buffer: &mut [PixelColor], frame: i32) {
-    // Clone shared state for thread safety.
     let cam = CAM.lock().unwrap();
     let world = WORLD.lock().unwrap();
     let width_usize = IMAGE_WIDTH as usize;
 
-    buffer.par_iter_mut().enumerate().for_each(|(index, pixel)| {
-        let x = index % width_usize;
-        let y = IMAGE_HEIGHT - 1 - (index / width_usize) as i32;
-
-        let grid_spacing = 3;
-        let total = grid_spacing * grid_spacing; // 25
-        let idx = frame % total;
-        let offset_x = idx % grid_spacing;
-        let offset_y = idx / grid_spacing; // integer division
-
-        if (x as i32 % grid_spacing == offset_x) && (y % grid_spacing == offset_y) {
-            let mut accum_color = Color::new(0.0, 0.0, 0.0);
-            for _ in 0..SAMPLES_PER_PIXEL {
-                let u = (x as f64 + constants::random_double() * 1.0) / ((IMAGE_WIDTH - 1) as f64);
-                let v = (y as f64 + constants::random_double() * 1.0) / ((IMAGE_HEIGHT - 1) as f64);
-                let r = cam.get_ray(u, v);
-                accum_color += ray_color(&r, &*world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
-            }
-            // Average the color samples.
-            *pixel = PixelColor::new(
-                accum_color.x() / (SAMPLES_PER_PIXEL as f64),
-                accum_color.y() / (SAMPLES_PER_PIXEL as f64),
-                accum_color.z() / (SAMPLES_PER_PIXEL as f64),
-            );
+    unsafe {
+        if let (Some(ref mut accum_buffer), Some(ref mut display_buffer)) =
+            (ACCUM_BUFFER.as_mut(), IMAGE_BUFFER.as_mut())
+        {
+            accum_buffer
+                .par_iter_mut()
+                .zip(display_buffer.par_iter_mut())
+                .enumerate()
+                .for_each(|(index, (accum, disp))| {
+                    let x = index % (IMAGE_WIDTH as usize);
+                    let y = IMAGE_HEIGHT - 1 - (index / (IMAGE_WIDTH as usize)) as i32;
+                    
+                    // Generate new sample for this pixel:
+                    let mut sample_color = Color::new(0.0, 0.0, 0.0);
+                    for _ in 0..SAMPLES_PER_PIXEL {
+                        let frame_offset = frame as f64 * 0.001;
+                        let u = (x as f64 + constants::random_double() + frame_offset)
+                            / ((IMAGE_WIDTH - 1) as f64);
+                        let v = (y as f64 + constants::random_double() + frame_offset)
+                            / ((IMAGE_HEIGHT - 1) as f64);
+                        let ray = cam.get_ray(u, v);
+                        sample_color += ray_color(&ray, &*world, MAX_DEPTH, MAX_TIME, DELTA_T, SINGULARITY);
+                    }
+                    sample_color = sample_color / (SAMPLES_PER_PIXEL as f64);
+                    
+                    // Update the accumulator and then update the display pixel.
+                    accum.update_ema(&sample_color, ALPHA);
+                    *disp = accum.to_pixel_color();
+                });
         }
-    });
+    }
 }
 
 #[no_mangle]
@@ -229,6 +239,8 @@ pub extern "C" fn initialize_image() {
     unsafe {
         // Allocate a vector with the desired number of pixels.
         IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
+
+        ACCUM_BUFFER = Some(vec![ColorAccumulator::new(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
     }
 }
 

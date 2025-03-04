@@ -10,7 +10,7 @@ int main() {
     std::cout << "Rendering Frames" << std::endl;
     initialize_image();
 
-    const int SCALE = 1;
+    const int SCALE = 2;
     int imageWidth = get_image_width();
     int imageHeight = get_image_height();
     int highResWidth = imageWidth * SCALE;

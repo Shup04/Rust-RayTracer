@@ -1,4 +1,5 @@
 use std::ops::AddAssign;
+use crate::color::Color;
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
@@ -17,6 +18,18 @@ impl PixelColor {
             b: (b * 255.0).clamp(0.0, 255.0) as u8,
             a: 255,
         }
+    }
+
+    pub fn x(&self) -> u8 {
+        self.r
+    }
+ 
+    pub fn y(&self) -> u8 {
+        self.g
+    }
+
+    pub fn z(&self) -> u8 {
+        self.b
     }
 }
 
