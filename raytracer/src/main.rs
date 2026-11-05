@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use color::Color;
 use pixel_color::PixelColor;
-use color_accumulator::ColorAccumulator;
+use color_accumulator::EmaColorAccumulator;
 
 use ray::Ray;
 use vec3::{Point3, Vec3, random_in_unit_sphere};
@@ -56,7 +56,7 @@ const MAX_TIME: f64 = 10.0; // Total simulation time
 const SINGULARITY: bool = false;
 
 static mut IMAGE_BUFFER: Option<Vec<PixelColor>> = None;
-static mut ACCUM_BUFFER: Option<Vec<ColorAccumulator>> = None;
+static mut ACCUM_BUFFER: Option<Vec<EmaColorAccumulator>> = None;
 
 // World and Camera Mutexes
 lazy_static! {
@@ -211,7 +211,7 @@ pub fn compute_image(buffer: &mut [PixelColor], frame: i32) {
                     sample_color = sample_color / (SAMPLES_PER_PIXEL as f64);
                     
                     // Update the accumulator and then update the display pixel.
-                    accum.update_ema(&sample_color, ALPHA);
+                    accum.update(&sample_color, ALPHA);
                     *disp = accum.to_pixel_color();
                 });
         }
@@ -240,7 +240,7 @@ pub extern "C" fn initialize_image() {
         // Allocate a vector with the desired number of pixels.
         IMAGE_BUFFER = Some(vec![PixelColor::default(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
 
-        ACCUM_BUFFER = Some(vec![ColorAccumulator::new(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
+        ACCUM_BUFFER = Some(vec![EmaColorAccumulator::new(); (IMAGE_WIDTH * IMAGE_HEIGHT) as usize]);
     }
 }
 
