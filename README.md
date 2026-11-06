@@ -113,12 +113,13 @@ Dimensions must be 2–4096, with at most 4,194,304 pixels; samples must be 1–
 The default is still 1080×607, five samples and seed 1. `--frames N` exits after
 N updates; without it the window runs until closed. The image export is the Rust
 buffer; the optional screenshot captures the actual window. Invalid options fail
-with exit code 2. Read `--help` for the full option list.
+with exit code 2. Numeric values use decimal digits without signs or whitespace; seed zero is valid. Export paths cannot be empty or consume another `--option`; prefix a literal filename beginning with `--` with `./`. Read `--help` for the full option list.
 
 ## Offline checks and example frames
 
 ```sh
 make -f raytracer/src/makefile test
+make -f raytracer/src/makefile test-cli
 python3 raytracer/tests/render_headless.py --output outputs/static.ppm
 python3 raytracer/tests/render_headless.py --animated --output outputs/animated.ppm
 ```
@@ -130,6 +131,10 @@ finite pre-conversion samples, identical bytes with one and four Rayon workers,
 repeated updates, stable borrowed pointers, rejected invalid reinitialization,
 successful reinitialization, opaque RGBA layout and idempotent shutdown. The Python
 headless examples use only the standard library and the actual release library.
+The seven `test-cli` checks exercise parsing through `--help` without initializing a
+window, including unsigned seed boundaries and malformed values. The C++ FFI
+smoke checks remain active when compiled with `-DNDEBUG`; initialization and
+validation do not depend on C/C++ `assert` being enabled.
 
 Both example frames below were rendered at **160×90, five samples per pixel,
 100 updates, seed 42, depth three and EMA alpha 0.5**. They are headless renderer
