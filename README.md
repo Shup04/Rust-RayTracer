@@ -2,7 +2,7 @@
 
 A Rust CPU ray tracer that grew from static images into an animated C++/raylib window. It explores how a small set of geometric and material rules can produce an image, then how to keep displaying that image while the scene changes. Gravity-inspired ray bending, partial-frame updates, and temporal sampling are experiments along that path.
 
-The latest implementation connects the renderer to a live display, but its temporal accumulator has a known brightness defect. This is an unfinished rendering experiment, with useful geometry, material, and display components; it is not a finished engine or a validated physical simulation.
+The latest implementation connects the renderer to a live display and keeps temporal averages at a stable brightness. This is still an unfinished rendering experiment, with useful geometry, material, and display components; it is not a finished engine or a validated physical simulation.
 
 ## The idea and how it developed
 
@@ -38,9 +38,9 @@ C++ window loop
 
 Rayon distributes pixel updates across CPU workers. Raylib/OpenGL presents the resulting texture; it does not perform this ray tracing on the GPU. The current frame loop samples **every pixel**. The earlier interleaved-grid optimization is historical, not an additional active optimization in the final commit.
 
-## Why temporal accumulation is unfinished
+## Temporal accumulation and brightness
 
-[`color_accumulator.rs`](raytracer/src/color_accumulator.rs) contains both a sum-based accumulator and an exponential moving average (EMA). The renderer uses the EMA with `ALPHA = 0.5`:
+[`color_accumulator.rs`](raytracer/src/color_accumulator.rs) separates two types: `ColorAccumulator` stores a sum and divides by its sample count at display time; `EmaColorAccumulator` stores an exponential moving average (EMA) and displays that average directly. The renderer uses the EMA with `ALPHA = 0.5`:
 
 ```text
 stored_color = alpha × new_frame_color + (1 − alpha) × stored_color
@@ -48,7 +48,9 @@ stored_color = alpha × new_frame_color + (1 − alpha) × stored_color
 
 This keeps recent samples influential instead of weighting all past frames equally. It is a plausible mechanism for smoothing sampling noise while a scene moves, although motion-related artifacts have not been evaluated here.
 
-**The active output conversion is wrong:** `update_ema` already stores an average, but `to_pixel_color` divides it by the accumulated frame count again. An isolated check of the original accumulator with repeated white inputs produced red-channel values of 255 on frame 1, 127 on frame 2, and 2 on frame 100. A constant input therefore darkens over time. That check establishes this arithmetic defect; it does not establish that the full application currently builds or renders correctly.
+The first frame initializes the EMA directly, without blending it with black. Later frames follow the formula above. The original implementation divided this already-averaged color by the frame count again, making a constant white input darken from 255 on frame 1 to 127 on frame 2 and 2 on frame 100. The separate types prevent that double normalization and keep the sum-based behavior available without mixing the two representations.
+
+Regression tests cover unchanged white and colored inputs across 1,000 updates, first-frame initialization, weighted history, weights of zero and one, empty accumulators, and sum-based averaging. These checks establish the accumulator's arithmetic, not the full window's rendering quality or its motion behavior.
 
 The capitalized [`ColorAccumulator.rs`](raytracer/src/ColorAccumulator.rs) is an older, separate file. The `mod color_accumulator` declaration selects the lowercase file described above. Editing the older file would not change the active renderer.
 
@@ -92,14 +94,20 @@ make -f makefile all
 
 The [makefile](raytracer/src/makefile) first runs `cargo build --release`, then links `main.cpp` against the Rust library in `../target/release` and raylib. Keep that working directory when launching: the embedded library search path is relative. `make -f makefile run` performs both steps. Building replaces the checked-in `my_app`; existing binaries are not evidence that a fresh source build works on another machine.
 
-These commands were checked against the source but were not executed while preparing this documentation. No dependencies were installed. The window has no scene-editing controls; scene, camera, sampling, and gravity changes currently require editing and rebuilding the relevant source.
+The Rust crate's tests, release build, and Clippy checks have been run on Debian 13 with Rust 1.99.1. They pass, though compiler and lint warnings remain. The C++ build and window have not been validated in that environment, which does not have raylib installed. The window has no scene-editing controls; scene, camera, sampling, and gravity changes currently require editing and rebuilding the relevant source.
+
+The accumulator tests run without raylib or a graphical session:
+
+```sh
+cargo test --manifest-path raytracer/Cargo.toml --all-targets
+```
 
 ## Definition of done
 
 A bounded finish is a reproducible CPU renderer demonstration with stable output and an explicit record of the experiments left outside it. It does not require a general-purpose engine, a Vulkan port, or physically accurate black-hole rendering.
 
 - [ ] Build the Rust library and active C++ window from source in one documented environment, record the working dependency/toolchain versions, and demonstrate startup and normal shutdown without relying on the committed binary.
-- [ ] Correct the temporal accumulator's normalization and verify that repeated identical samples keep the same brightness over many updates; make the intended sum-versus-EMA behavior explicit.
+- [x] Correct the temporal accumulator's normalization and verify that repeated identical samples keep the same brightness over many updates; make the intended sum-versus-EMA behavior explicit.
 - [ ] Demonstrate the existing spheres, boxes, diffuse surfaces, and fuzzy metals in a static scene, then the animated sphere. Record sampling settings and check that temporal blending does not progressively darken the image; record remaining motion/noise artifacts honestly.
 - [ ] Verify the existing single-caller buffer lifecycle: initialize once, update repeatedly, read/upload the RGBA buffer, and close. Record the ownership and reinitialization limits so the display does not depend on an accidental FFI assumption.
 - [ ] Preserve a representative screenshot or short capture with its settings and a short conclusion. Identify gravity, volumetrics, and Vulkan as either separately demonstrated experiments or intentionally unfinished historical work, rather than prerequisites that keep this renderer open forever.
