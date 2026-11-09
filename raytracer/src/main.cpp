@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -6,9 +7,16 @@
 #include "raylib.h"
 #include "raytracer_ffi.h"
 
+static bool decimal_digits(const std::string& value) {
+    return !value.empty() && std::all_of(value.begin(), value.end(), [](char c) {
+        return c >= '0' && c <= '9';
+    });
+}
+
 static int positive_int(const char* value) {
     std::size_t consumed = 0;
     const std::string text(value);
+    if (!decimal_digits(text)) throw std::invalid_argument("expected positive decimal integer");
     int parsed = std::stoi(text, &consumed);
     if (consumed != text.size() || parsed <= 0) throw std::invalid_argument("expected positive integer");
     return parsed;
@@ -29,14 +37,16 @@ int main(int argc, char** argv) {
                 return 0;
             }
             if (++i == argc) throw std::invalid_argument("missing option value");
+            const std::string value(argv[i]);
+            if (value.empty() || value.rfind("--", 0) == 0)
+                throw std::invalid_argument("missing option value: " + option);
             if (option == "--width") width = positive_int(argv[i]);
             else if (option == "--height") height = positive_int(argv[i]);
             else if (option == "--samples") samples = positive_int(argv[i]);
             else if (option == "--frames") frames = positive_int(argv[i]);
             else if (option == "--seed") {
-                const std::string value(argv[i]);
                 std::size_t consumed = 0;
-                if (value.empty() || value[0] == '-') throw std::invalid_argument("invalid seed");
+                if (!decimal_digits(value)) throw std::invalid_argument("invalid seed: expected unsigned decimal integer");
                 seed = std::stoull(value, &consumed);
                 if (consumed != value.size()) throw std::invalid_argument("invalid seed");
             }
@@ -80,6 +90,7 @@ int main(int argc, char** argv) {
             const char rgb[] = {static_cast<char>(pixels[i].r), static_cast<char>(pixels[i].g), static_cast<char>(pixels[i].b)};
             file.write(rgb, 3);
         }
+        file.close();  // Include buffered write/close errors in the exit status.
         if (!file) { std::cerr << "Failed to write " << output << '\n'; result = 1; }
     }
     std::cout << "Completed " << frame << " frames at " << width << 'x' << height
